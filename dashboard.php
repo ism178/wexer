@@ -7,10 +7,31 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Fetch customers
-$stmt = $pdo->prepare("SELECT * FROM customers WHERE user_id = ?");
+// Determine sorting column and order
+$valid_columns = ['name', 'phone', 'address', 'notes', 'created_at'];
+$sort_column = isset($_GET['sort']) && in_array($_GET['sort'], $valid_columns) ? $_GET['sort'] : 'created_at';
+$sort_order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'asc' : 'desc';
+
+// Fetch user details, including profile picture
+$stmt = $pdo->prepare("SELECT first_name, last_name, usertag, profile_picture FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
-$customers = $stmt->fetchAll();
+$user = $stmt->fetch();
+
+// Fetch all tables and their customers
+$stmt = $pdo->prepare("SELECT * FROM tables WHERE user_id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$tables = $stmt->fetchAll();
+
+$tables_with_customers = [];
+foreach ($tables as $table) {
+    $stmt = $pdo->prepare("SELECT * FROM customers WHERE user_id = ? AND table_id = ?");
+    $stmt->execute([$_SESSION['user_id'], $table['id']]);
+    $customers = $stmt->fetchAll();
+    $tables_with_customers[] = [
+        'table' => $table,
+        'customers' => $customers
+    ];
+}
 ?>
 
 <!DOCTYPE html>
@@ -19,56 +40,167 @@ $customers = $stmt->fetchAll();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard</title>
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-<div class="container mt-5">
-    <h2 class="text-center mb-4">Customer Dashboard</h2>
-    <div class="d-flex justify-content-between mb-3">
-        <a href="logout.php" class="btn btn-danger">Logout</a>
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">Customer Dashboard</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto align-items-center">
+                <li class="nav-item">
+                    <a class="nav-link" href="manage_tables.php">
+                        <i class="bi bi-table"></i> Manage Tables
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <img src="<?= htmlspecialchars($user['profile_picture'] ?? 'img/user_placeholder.png') ?>" alt="User" class="rounded-circle me-2" width="40" height="40">
+                        <span><?= htmlspecialchars($user['usertag']) ?></span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li><a class="dropdown-item" href="profile.php"><i class="bi bi-person"></i> Profile</a></li>
+                        <li><a class="dropdown-item" href="settings.php"><i class="bi bi-gear"></i> Settings</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
     </div>
-    <form method="post" action="add_customer.php" class="card p-4 shadow-sm mb-4">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <input type="text" name="name" class="form-control" placeholder="Customer Name" required>
+</nav>
+
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-center">All Tables and Customers</h2>
+        <a href="manage_tables.php" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i>
+        </a>
+    </div>
+    <?php foreach ($tables_with_customers as $table_data): ?>
+        <?php
+        // Determine sorting column and order for the current table
+        $current_table_id = $table_data['table']['id'];
+        $table_sort_column = isset($_GET["sort_$current_table_id"]) && in_array($_GET["sort_$current_table_id"], $valid_columns) ? $_GET["sort_$current_table_id"] : 'created_at';
+        $table_sort_order = isset($_GET["order_$current_table_id"]) && $_GET["order_$current_table_id"] === 'asc' ? 'asc' : 'desc';
+
+        // Sort customers for the current table
+        usort($table_data['customers'], function ($a, $b) use ($table_sort_column, $table_sort_order) {
+            if ($table_sort_order === 'asc') {
+                return strcmp($a[$table_sort_column], $b[$table_sort_column]);
+            }
+            return strcmp($b[$table_sort_column], $a[$table_sort_column]);
+        });
+        ?>
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <span><?= htmlspecialchars($table_data['table']['title']) ?></span>
+                <div>
+                    <a href="import_customers.php?id=<?= $current_table_id ?>" class="btn btn-sm btn-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i>
+                    </a>
+                    <a href="edit_table.php?id=<?= $current_table_id ?>" class="btn btn-sm btn-warning">
+                        <i class="bi bi-pencil-square"></i>
+                    </a>
+                    <form method="post" action="manage_tables.php" class="d-inline">
+                        <input type="hidden" name="delete_table_id" value="<?= $current_table_id ?>">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this table? This action cannot be undone.');">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
             </div>
-            <div class="col-md-4">
-                <input type="text" name="phone" class="form-control" placeholder="Phone Number" required>
-            </div>
-            <div class="col-md-4">
-                <input type="text" name="address" class="form-control" placeholder="Address">
-            </div>
-            <div class="col-12">
-                <textarea name="notes" class="form-control" placeholder="Notes"></textarea>
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn btn-primary w-100">Add Customer</button>
+            <div class="card-body">
+                <?php if (!empty($table_data['customers'])): ?>
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>
+                                    <a href="?sort_<?= $current_table_id ?>=name&order_<?= $current_table_id ?>=<?= $table_sort_column === 'name' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
+                                        Name <?= $table_sort_column === 'name' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="?sort_<?= $current_table_id ?>=phone&order_<?= $current_table_id ?>=<?= $table_sort_column === 'phone' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
+                                        Phone <?= $table_sort_column === 'phone' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="?sort_<?= $current_table_id ?>=address&order_<?= $current_table_id ?>=<?= $table_sort_column === 'address' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
+                                        Address <?= $table_sort_column === 'address' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="?sort_<?= $current_table_id ?>=notes&order_<?= $current_table_id ?>=<?= $table_sort_column === 'notes' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
+                                        Notes <?= $table_sort_column === 'notes' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="?sort_<?= $current_table_id ?>=created_at&order_<?= $current_table_id ?>=<?= $table_sort_column === 'created_at' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
+                                        Created At <?= $table_sort_column === 'created_at' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
+                                    </a>
+                                </th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($table_data['customers'] as $customer): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($customer['name']) ?></td>
+                                    <td><?= htmlspecialchars($customer['phone']) ?></td>
+                                    <td><?= htmlspecialchars($customer['address']) ?></td>
+                                    <td><?= htmlspecialchars($customer['notes']) ?></td>
+                                    <td><?= $customer['created_at'] ?></td>
+                                    <td>
+                                        <a href="edit_customer.php?id=<?= $customer['id'] ?>" class="btn btn-sm btn-warning">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </a>
+                                        <a href="delete_customer.php?id=<?= $customer['id'] ?>&table_id=<?= $current_table_id ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this customer?');">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <!-- Add Customer Row -->
+                            <tr>
+                                <form method="post" action="add_customer.php">
+                                    <input type="hidden" name="table_id" value="<?= $current_table_id ?>">
+                                    <td>
+                                        <input type="text" name="name" class="form-control" placeholder="Name" required>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="phone" class="form-control" placeholder="Phone" required>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="address" class="form-control" placeholder="Address">
+                                    </td>
+                                    <td>
+                                        <input type="text" name="notes" class="form-control" placeholder="Notes">
+                                    </td>
+                                    <td>-</td>
+                                    <td>
+                                        <button type="submit" class="btn btn-sm btn-success">
+                                            <i class="bi bi-plus-circle"></i>
+                                        </button>
+                                    </td>
+                                </form>
+                            </tr>
+                        </tbody>
+                    </table>
+                <?php else: ?>
+                    <p class="text-muted">No customers in this table.</p>
+                <?php endif; ?>
             </div>
         </div>
-    </form>
-    <table class="table table-bordered table-striped">
-        <thead class="table-dark">
-            <tr>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Address</th>
-                <th>Notes</th>
-                <th>Created</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($customers as $c): ?>
-            <tr>
-                <td><?= htmlspecialchars($c['name']) ?></td>
-                <td><?= htmlspecialchars($c['phone']) ?></td>
-                <td><?= htmlspecialchars($c['address']) ?></td>
-                <td><?= htmlspecialchars($c['notes']) ?></td>
-                <td><?= $c['created_at'] ?></td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+    <?php endforeach; ?>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

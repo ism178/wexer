@@ -2,22 +2,25 @@
 require 'db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $first_name = trim($_POST['first_name']);
+    $last_name = trim($_POST['last_name']);
     $username = trim($_POST['username']);
+    $usertag = trim($_POST['usertag']);
     $password = $_POST['password'];
 
     // Hash the password
     $hashed = password_hash($password, PASSWORD_DEFAULT);
 
-    // Check if username already exists
-    $check = $pdo->prepare("SELECT id FROM users WHERE username = ?");
-    $check->execute([$username]);
+    // Check if username or usertag already exists
+    $check = $pdo->prepare("SELECT id FROM users WHERE username = ? OR usertag = ?");
+    $check->execute([$username, $usertag]);
 
     if ($check->rowCount() > 0) {
-        $error = "Username already taken.";
+        $error = "Username or @usertag already taken.";
     } else {
         // Insert user
-        $stmt = $pdo->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
-        if ($stmt->execute([$username, $hashed])) {
+        $stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, username, usertag, password) VALUES (?, ?, ?, ?, ?)");
+        if ($stmt->execute([$first_name, $last_name, $username, $usertag, $hashed])) {
             header("Location: index.php?msg=registered");
             exit();
         } else {
@@ -33,6 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register</title>
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
@@ -43,7 +47,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <h2 class="text-center">Register</h2>
                 <?php if (isset($error)) echo "<div class='alert alert-danger'>$error</div>"; ?>
                 <div class="mb-3">
+                    <input type="text" name="first_name" class="form-control" placeholder="First Name" required>
+                </div>
+                <div class="mb-3">
+                    <input type="text" name="last_name" class="form-control" placeholder="Last Name" required>
+                </div>
+                <div class="mb-3">
                     <input type="text" name="username" class="form-control" placeholder="Choose a username" required>
+                </div>
+                <div class="mb-3">
+                    <input type="text" name="usertag" class="form-control" placeholder="Choose a @usertag" required>
                 </div>
                 <div class="mb-3">
                     <input type="password" name="password" class="form-control" placeholder="Choose a password" required>
