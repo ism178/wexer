@@ -7,12 +7,12 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Determine sorting column and order
-$valid_columns = ['name', 'phone', 'address', 'notes', 'created_at'];
-$sort_column = isset($_GET['sort']) && in_array($_GET['sort'], $valid_columns) ? $_GET['sort'] : 'created_at';
-$sort_order = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'asc' : 'desc';
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-// Fetch user details, including profile picture
+// Fetch user details
 $stmt = $pdo->prepare("SELECT first_name, last_name, usertag, profile_picture FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
 $user = $stmt->fetch();
@@ -32,7 +32,13 @@ foreach ($tables as $table) {
         'customers' => $customers
     ];
 }
+
+// Capture PHP errors and pass them to JavaScript
+ob_start();
 ?>
+<script>
+
+</script>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -57,6 +63,11 @@ foreach ($tables as $table) {
                 <li class="nav-item">
                     <a class="nav-link" href="manage_tables.php">
                         <i class="bi bi-table"></i> Manage Tables
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="invoices.php">
+                        <i class="bi bi-receipt"></i> Invoices
                     </a>
                 </li>
                 <li class="nav-item dropdown">
@@ -117,39 +128,19 @@ foreach ($tables as $table) {
                 </div>
             </div>
             <div class="card-body">
-                <?php if (!empty($table_data['customers'])): ?>
-                    <table class="table table-bordered table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>
-                                    <a href="?sort_<?= $current_table_id ?>=name&order_<?= $current_table_id ?>=<?= $table_sort_column === 'name' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
-                                        Name <?= $table_sort_column === 'name' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="?sort_<?= $current_table_id ?>=phone&order_<?= $current_table_id ?>=<?= $table_sort_column === 'phone' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
-                                        Phone <?= $table_sort_column === 'phone' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="?sort_<?= $current_table_id ?>=address&order_<?= $current_table_id ?>=<?= $table_sort_column === 'address' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
-                                        Address <?= $table_sort_column === 'address' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="?sort_<?= $current_table_id ?>=notes&order_<?= $current_table_id ?>=<?= $table_sort_column === 'notes' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
-                                        Notes <?= $table_sort_column === 'notes' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
-                                    </a>
-                                </th>
-                                <th>
-                                    <a href="?sort_<?= $current_table_id ?>=created_at&order_<?= $current_table_id ?>=<?= $table_sort_column === 'created_at' && $table_sort_order === 'asc' ? 'desc' : 'asc' ?>" class="text-white">
-                                        Created At <?= $table_sort_column === 'created_at' ? ($table_sort_order === 'asc' ? '▲' : '▼') : '' ?>
-                                    </a>
-                                </th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Address</th>
+                            <th>Notes</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (!empty($table_data['customers'])): ?>
                             <?php foreach ($table_data['customers'] as $customer): ?>
                                 <tr>
                                     <td><?= htmlspecialchars($customer['name']) ?></td>
@@ -167,34 +158,35 @@ foreach ($tables as $table) {
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <!-- Add Customer Row -->
-                            <tr>
-                                <form method="post" action="add_customer.php">
-                                    <input type="hidden" name="table_id" value="<?= $current_table_id ?>">
-                                    <td>
-                                        <input type="text" name="name" class="form-control" placeholder="Name" required>
-                                    </td>
-                                    <td>
-                                        <input type="text" name="phone" class="form-control" placeholder="Phone" required>
-                                    </td>
-                                    <td>
-                                        <input type="text" name="address" class="form-control" placeholder="Address">
-                                    </td>
-                                    <td>
-                                        <input type="text" name="notes" class="form-control" placeholder="Notes">
-                                    </td>
-                                    <td>-</td>
-                                    <td>
-                                        <button type="submit" class="btn btn-sm btn-success">
-                                            <i class="bi bi-plus-circle"></i>
-                                        </button>
-                                    </td>
-                                </form>
-                            </tr>
-                        </tbody>
-                    </table>
-                <?php else: ?>
-                    <p class="text-muted">No customers in this table.</p>
+                        <?php endif; ?>
+                        <!-- Add Customer Row -->
+                        <tr>
+                            <form method="post" action="add_customer.php">
+                                <input type="hidden" name="table_id" value="<?= $current_table_id ?>">
+                                <td>
+                                    <input type="text" name="name" class="form-control" placeholder="Name" required>
+                                </td>
+                                <td>
+                                    <input type="text" name="phone" class="form-control" placeholder="Phone" required>
+                                </td>
+                                <td>
+                                    <input type="text" name="address" class="form-control" placeholder="Address">
+                                </td>
+                                <td>
+                                    <input type="text" name="notes" class="form-control" placeholder="Notes">
+                                </td>
+                                <td>-</td>
+                                <td>
+                                    <button type="submit" class="btn btn-sm btn-success">
+                                        <i class="bi bi-plus-circle"></i> Add
+                                    </button>
+                                </td>
+                            </form>
+                        </tr>
+                    </tbody>
+                </table>
+                <?php if (empty($table_data['customers'])): ?>
+                    <p class="text-muted">No customers in this table. Add the first customer using the form above.</p>
                 <?php endif; ?>
             </div>
         </div>

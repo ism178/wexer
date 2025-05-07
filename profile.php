@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
 
     // Ensure the directory exists
     if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0777, true); // Create the directory with proper permissions
+        mkdir($uploadDir, 0777, true);
     }
 
     // Validate file upload
@@ -27,20 +27,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         $fileName = $_SESSION['user_id'] . '_' . time() . '.' . pathinfo($file['name'], PATHINFO_EXTENSION);
         $filePath = $uploadDir . $fileName;
 
-        // Move the uploaded file
         if (move_uploaded_file($file['tmp_name'], $filePath)) {
-            // Update the database with the new profile picture path
             $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
             $stmt->execute([$filePath, $_SESSION['user_id']]);
-
-            // Refresh the page to show the updated picture
             header("Location: profile.php?msg=uploaded");
             exit();
         } else {
-            $error = "Failed to upload the profile picture.";
+            $error = "Failed to upload profile picture.";
         }
     } else {
-        $error = "Invalid file type. Please upload a JPEG, PNG, or GIF image.";
+        $error = "Invalid file type.";
     }
 }
 ?>

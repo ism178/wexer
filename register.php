@@ -8,23 +8,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usertag = trim($_POST['usertag']);
     $password = $_POST['password'];
 
-    // Hash the password
-    $hashed = password_hash($password, PASSWORD_DEFAULT);
-
-    // Check if username or usertag already exists
-    $check = $pdo->prepare("SELECT id FROM users WHERE username = ? OR usertag = ?");
-    $check->execute([$username, $usertag]);
-
-    if ($check->rowCount() > 0) {
-        $error = "Username or @usertag already taken.";
+    // Validate input
+    if (empty($first_name) || empty($last_name) || empty($username) || empty($usertag) || empty($password)) {
+        $error = "All fields are required.";
     } else {
-        // Insert user
-        $stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, username, usertag, password) VALUES (?, ?, ?, ?, ?)");
-        if ($stmt->execute([$first_name, $last_name, $username, $usertag, $hashed])) {
-            header("Location: index.php?msg=registered");
-            exit();
+        // Hash the password
+        $hashed = password_hash($password, PASSWORD_DEFAULT);
+
+        // Check if username or usertag already exists
+        $check = $pdo->prepare("SELECT id FROM users WHERE username = ? OR usertag = ?");
+        $check->execute([$username, $usertag]);
+
+        if ($check->rowCount() > 0) {
+            $error = "Username or @usertag already taken.";
         } else {
-            $error = "Registration failed.";
+            // Insert user
+            $stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, username, usertag, password) VALUES (?, ?, ?, ?, ?)");
+            if ($stmt->execute([$first_name, $last_name, $username, $usertag, $hashed])) {
+                header("Location: index.php?msg=registered");
+                exit();
+            } else {
+                $error = "Registration failed.";
+            }
         }
     }
 }
